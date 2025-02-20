@@ -3,7 +3,7 @@
 ## Baixar Dependências
 Instale o **NASM** e o **QEMU**
 
-##Verificar o Tamanho do Arquivo
+## Verificar o Tamanho do Arquivo
 
 Para checar o tamanho do kernel compilado:
 ```

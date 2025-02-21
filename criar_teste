@@ -1,0 +1,31 @@
+comando_criar:
+    ; Solicita o nome do arquivo
+    mov si, MsgNomeArquivo
+    call print_string
+
+    ; Lê o nome do arquivo
+    mov bx, FileNameBuffer
+    call limpar_buffer
+    mov di, FileNameBuffer
+    call ler_linha
+    call print_barra_n
+
+    ; Chama a syscall para criar o arquivo
+    mov ax, 0x01          ; Código da syscall "criar_arquivo"
+    mov si, FileNameBuffer ; SI aponta para o nome do arquivo
+    clc                   ; Limpa o carry flag antes da syscall
+    int 0x80              ; Chama o manipulador de syscalls
+    jc .falha_criacao     ; Verifica se houve erro (carry flag = 1)
+
+    ; Se não houve erro, exibe mensagem de sucesso
+    mov si, MsgArquivoCriado
+    call print_string
+    call print_barra_n
+    jmp editor_loop       ; Retorna ao loop principal
+
+.falha_criacao:
+    ; Se houve erro, exibe mensagem de falha
+    mov si, MsgErroCriacao
+    call print_string
+    call print_barra_n
+    jmp editor_loop       ; Retorna ao loop principal

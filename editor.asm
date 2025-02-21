@@ -23,6 +23,7 @@ editor_loop:
 
     ; Lê linha de entrada
     mov bx, InputBuffer
+    mov cx, 512
     call limpar_buffer
 
     cld
@@ -61,6 +62,7 @@ comando_criar:
 
     ; Lê o nome do arquivo
     mov bx, FileNameBuffer
+    mov cx, 11
     call limpar_buffer
     mov di, FileNameBuffer
     call ler_linha
@@ -80,12 +82,19 @@ comando_criar:
     mov si, MsgArquivoCriado
     call print_string
     call print_barra_n
+
+    mov cx, 512
+    mov bx, InputBuffer
+    call limpar_buffer
     jmp editor_loop
 
 .falha_criacao:
     mov si, MsgErroCriacao
     call print_string
     call print_barra_n
+    mov cx, 512
+    mov bx, InputBuffer
+    call limpar_buffer
     jmp editor_loop
     
 
@@ -211,7 +220,7 @@ ler_linha:
     ret
 
 limpar_buffer:
-    mov cx, 512
+    ;mov cx, 512
     xor al, al
 .loop:
     mov [bx], al
@@ -247,7 +256,7 @@ MsgErroCriacao      db 'Erro ao criar o arquivo.', 0
 MsgArquivoCriado    db 'Arquivo criado com sucesso.', 0
 
 InputBuffer         db 512 dup(0)
-FileNameBuffer      db 12 dup(0) ; Nome do arquivo + terminador
+FileNameBuffer      db 11 dup(0) ; Nome do arquivo + terminador
 DiretorioBuffer     db 512 dup(0)
 
 ; Preenchimento até o final do setor

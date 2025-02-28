@@ -73,7 +73,7 @@ cli_loop:
     call compare_strings
     je reiniciar
 
-    ; Compara com "editar"
+    ; Compara com "editor"
     mov si, InputBuffer
     mov di, CmdEditar
     mov cx, 6
@@ -761,7 +761,7 @@ erro_leitura_gravacao:
 
 Prompt                  db '> ', 0
 CmdReiniciar            db 'reiniciar', 0
-CmdEditar             db 'editar', 0
+CmdEditar             db 'editor', 0
 MsgErroComando          db 'Comando desconhecido.', 0
 MensagemInicial         db 'Nosso primeiro SO', 0
 MsgReiniciar            db 'Reiniciando o sistema...', 0

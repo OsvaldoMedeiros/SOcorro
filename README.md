@@ -25,7 +25,7 @@ Crie a imagem do disco e grave os arquivos:
 dd if=/dev/zero of=disk.img bs=512 count=2880
 dd if=bootloader.bin of=disk.img bs=512 count=1 seek=0 conv=notrunc
 dd if=kernel.bin of=disk.img bs=512 count=5 seek=2 conv=notrunc
-dd if=editor.bin of=disk.img bs=512 count=3 seek=7 conv=notrunc
+dd if=editor.bin of=disk.img bs=512 count=5 seek=7 conv=notrunc
 ```
 ## Executar no QEMU
 

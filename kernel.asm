@@ -13,8 +13,8 @@ org 0x0000   ; Endereço de carregamento (depende do bootloader)
 ;   boot - setor 1
 ;   diretorio raiz - setor 2
 ;   kernel - setor 3...7
-;   editor - setor 8...10
-;   arquivos - setor 11...
+;   editor - setor 8...12
+;   arquivos - setor 13...
 ;------------------------------------------------------------------------------
 
 %define DIRETORIO_ENTRY_SIZE 15

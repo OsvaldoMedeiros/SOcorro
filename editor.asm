@@ -11,122 +11,191 @@
 ;   Nome de arquivo limitado a 11 bytes, sem espaços, terminado em 0.
 ;   O kernel armazena/recupera dados de 1 setor (512 bytes) em 0x9000:0000.
 ; ---------------------------------------------------------------------------
-
-[org 0x0000]        ; origem do código (offset = 0, mas segmento será 0x1000)
 bits 16
+org 0x0000
 
-; ===========================================================================
-; CÓDIGO
-; ===========================================================================
-main:
-    ; Ajusta DS = CS para podermos acessar as variáveis de dados
+%define DIRETORIO_ENTRY_SIZE 15
+
+start:
+    ; Configura DS = CS
     push cs
     pop ds
 
+    call limpar_tela
+
+    ; Mensagem inicial
+    mov si, MsgBemVindo
+    call print_string
+    call print_barra_n
+
 editor_loop:
     ; Exibe prompt
-    mov si, promptEditor
+    mov si, PromptEditor
     call print_string
 
-    ; Lê comando do usuário para editorBuffer
-    mov bx, editorBuffer
+    ; Lê linha de entrada
+    mov bx, InputBuffer
     mov word [TAM_LIMPAR], TAMANHO_SETOR
     call limpar_buffer
-    mov di, editorBuffer
-    call read_line
 
-    ; Tira uma linha
-    call newline
+    cld
+    mov di, InputBuffer
+    call ler_linha
+    call print_barra_n
 
     ; Compara com "criar"
-    mov si, editorBuffer
+    mov si, InputBuffer
     mov di, cmdCriar
-    mov cx, 5
+    mov cx, 6
     call compare_strings
-    je do_criar
+    je comando_criar
+
+    ; Compara com "listar"
+    mov si, InputBuffer
+    mov di, cmdListar
+    mov cx, 6
+    call compare_strings
+    je comando_listar
 
     ; Compara com "ler"
-    mov si, editorBuffer
+    mov si, InputBuffer
     mov di, cmdLer
     mov cx, 3
     call compare_strings
     je do_ler
 
     ; Compara com "gravar"
-    mov si, editorBuffer
+    mov si, InputBuffer
     mov di, cmdGravar
     mov cx, 6
     call compare_strings
     je do_gravar
 
     ; Compara com "sair"
-    mov si, editorBuffer
+    mov si, InputBuffer
     mov di, cmdSair
     mov cx, 4
     call compare_strings
     je do_sair
 
-    ; Se nenhum comando coincide
-    mov si, msgErroComando
+    ; Se não encontrou
+    mov si, MsgErroComando
     call print_string
-    call newline
+    call print_barra_n
+    jmp editor_loop
+
+;------------------------------------------------------------------------------
+; Comando "criar"
+; Cria um novo arquivo.
+;------------------------------------------------------------------------------
+comando_criar:
+    ; Solicita o nome do arquivo
+    mov si, MsgNomeArquivo
+    call print_string
+
+    ; Lê o nome do arquivo
+    mov bx, FileNameBuffer
+    mov word [TAM_LIMPAR], 11
+    call limpar_buffer
+    mov di, FileNameBuffer
+    call ler_linha
+    call print_barra_n
+
+    ; Chama a syscall para criar o arquivo
+    mov ax, 0x01          ; Código da syscall "criar_arquivo"
+    mov si, FileNameBuffer ; SI aponta para o nome do arquivo
+    int 0x80              ; Chama o manipulador de syscalls
+
+    ; Verifica se a criação foi bem-sucedida
+    jc .falha_criacao
+    mov si, MsgArquivoCriado
+    call print_string
+    call print_barra_n
+
+    mov word [TAM_LIMPAR], TAMANHO_SETOR
+    mov bx, InputBuffer
+    call limpar_buffer
+    jmp editor_loop
+
+.falha_criacao:
+    mov si, MsgErroCriacao
+    call print_string
+    call print_barra_n
+    mov word [TAM_LIMPAR], TAMANHO_SETOR
+    mov bx, InputBuffer
+    call limpar_buffer
     jmp editor_loop
     
 
-; ---------------------------------------------------------------------------
-; do_criar
-; ---------------------------------------------------------------------------
-do_criar:
-    ; Pede ao usuário o nome do arquivo
-    mov si, msgDigiteNomeArq
-    call print_string
+;------------------------------------------------------------------------------
+; print_buffer_filename
+; Imprime o conteúdo do buffer FileNameBuffer
+;------------------------------------------------------------------------------
+print_buffer_filename:
+    mov bx, FileNameBuffer
+    mov cx, 11           ; Limita a impressão aos primeiros 11 bytes
+.print_loop:
+    mov al, [bx]
+    cmp al, 0            ; Terminador nulo
+    je .done             ; Se sim, sai do loop
+    mov ah, 0x0E         ; Funcao para imprimir caractere na tela
+    int 0x10             ; Chama a interrupção de vídeo
+    inc bx               ; Avança para o proximo caractere
+    loop .print_loop
+.done:
+    ret
 
-    ; limpa buffer
-    mov bx, fileNameBuffer
-    mov word [TAM_LIMPAR], 12
-    call limpar_buffer
+;------------------------------------------------------------------------------
+; Comando "listar"
+; Lista os arquivos existentes.
+;------------------------------------------------------------------------------
+comando_listar:
+    ; Chama a syscall para listar arquivos
+    mov ax, 0x05          ; Código da syscall "listar_arquivos"
+    int 0x80              ; Chama o manipulador de syscalls
 
-    ; Lê o nome para fileNameBuffer
-    mov di, fileNameBuffer
-    call read_line
-    call newline
+    ; Imprime os nomes dos arquivos
+    mov si, DiretorioBuffer
+    mov cx, TAMANHO_SETOR / DIRETORIO_ENTRY_SIZE
+.listar_loop:
+    ; Verifica se a entrada está vazia
+    cmp byte [si], 0
+    je .proximo_entrada
 
-    ; Chama syscall criar_arquivo (AX=1)
-    mov ax, 0x0001
-    mov si, fileNameBuffer
-    int 0x80
-    ; Se houve erro, o kernel já exibiu msg (ou travou). Caso contrário:
-    mov si, msgArquivoCriado
-    call print_string
-    call newline
-    jmp editor_loop 
+    ; Imprime o nome do arquivo
+    push cx
+    mov di, si
+    call print_filename
+    call print_barra_n
+    pop cx
+
+.proximo_entrada:
+    add si, DIRETORIO_ENTRY_SIZE
+    loop .listar_loop
+
+    jmp editor_loop
+
+
 
 ; ---------------------------------------------------------------------------
 ; do_ler
 ; ---------------------------------------------------------------------------
 do_ler:
     ; Pede ao usuário o nome do arquivo
-    mov si, msgDigiteNomeArq
+    mov si, MsgNomeArquivo
     call print_string
 
-    ; limpa buffer
-    mov bx, fileNameBuffer
-    mov word [TAM_LIMPAR], 12
+    ; Limpa o buffer e lê o nome do arquivo
+    mov bx, FileNameBuffer
+    mov word [TAM_LIMPAR], 11
     call limpar_buffer
-
-    ; Lê nome para fileNameBuffer
-    mov di, fileNameBuffer
-    call read_line
-    call newline
-
-    ; limpando buffer
-    mov bx, editorBuffer
-    mov word [TAM_LIMPAR], TAMANHO_SETOR
-    call limpar_buffer
-    
+    mov di, FileNameBuffer
+    call ler_linha
+    call print_barra_n
+ 
     ; Chama syscall ler_arquivo (AX=2)
     mov ax, 0x0002
-    mov si, fileNameBuffer
+    mov si, FileNameBuffer
     int 0x80
     ; Kernel colocou o conteúdo em 0x9000:0000, com até 512 bytes,
     ; terminados em 0 se menor que 512, ou sem 0 se cheio.
@@ -139,21 +208,21 @@ do_ler:
     pop ds
     
     ; copiando da região 0x9000:0000
-    call copy_kernel_buffer_to_editorBuffer
+    call copy_kernel_buffer_to_InputBuffer
 
     ; Exibe o que foi lido
     mov si, msgConteudoLido
     call print_string
-    call newline
+    call print_barra_n
 
     ; Imprime o conteúdo
-    mov si, editorBuffer
+    mov si, InputBuffer
     call print_string
-    call newline
+    call print_barra_n
 
     mov si, msgArquivoLido
     call print_string
-    call newline
+    call print_barra_n
 
     jmp editor_loop
 
@@ -162,49 +231,49 @@ do_ler:
 ; ---------------------------------------------------------------------------
 do_gravar:
     ; Pede nome do arquivo
-    mov si, msgDigiteNomeArq
+    mov si, MsgNomeArquivo
     call print_string
 
     ; limpa buffer
-    mov bx, fileNameBuffer
-    mov word [TAM_LIMPAR], 12
+    mov bx, FileNameBuffer
+    mov word [TAM_LIMPAR], 11
     call limpar_buffer
 
-    mov di, fileNameBuffer
-    call read_line
-    call newline
+    mov di, FileNameBuffer
+    call ler_linha
+    call print_barra_n
 
     ; Pede conteúdo
     mov si, msgDigiteConteudo
     call print_string
-    call newline
+    call print_barra_n
 
     ; limpando buffer
-    mov bx, editorBuffer
+    mov bx, InputBuffer
     mov word [TAM_LIMPAR], TAMANHO_SETOR
     call limpar_buffer
 
-    ; Lê conteúdo para editorBuffer
-    mov di, editorBuffer
-    call read_line
-    call newline
+    ; Lê conteúdo para InputBuffer
+    mov di, InputBuffer
+    call ler_linha
+    call print_barra_n
 
-    ; Copia editorBuffer -> 0x9000:0000
-    call copy_editorBuffer_to_kernelBuffer
+    ; Copia InputBuffer -> 0x9000:0000
+    call copy_InputBuffer_to_kernelBuffer
 
     ; Chama syscall gravar_arquivo (AX=3)
     ;   SI -> nome do arquivo
     ;   DI -> (qualquer), pois internamente o kernel sempre olha 0x9000:0000
     ;         mas manteremos a convenção de "mov di, 0"
     mov ax, 0x0003
-    mov si, fileNameBuffer
+    mov si, FileNameBuffer
     xor di, di         ; 0
     int 0x80
 
     ; Exibe mensagem
     mov si, msgArquivoGravado
     call print_string
-    call newline
+    call print_barra_n
 
     jmp editor_loop
 
@@ -216,39 +285,44 @@ do_gravar:
 do_sair:
     mov si, msgSeparador
     call print_string
-    call newline
+    call print_barra_n
     mov si, msgFim
     call print_string
-    call newline
-    jmp $
+    call print_barra_n
+    int 19h
 
-; ===========================================================================
-; Rotinas auxiliares
-; ===========================================================================
-
-; ---------------------------------------------------------------------------
-; print_string
-; Exibe uma string (terminada em 0) na tela via BIOS (int 0x10, função 0x0E)
-; ---------------------------------------------------------------------------
-print_string:
-    pusha
-.next_char:
-    mov al, [si]
-    cmp al, 0
-    je .fim
-    mov ah, 0x0E
+;------------------------------------------------------------------------------
+; Funções Auxiliares
+;------------------------------------------------------------------------------
+limpar_tela:
+    mov ah, 0x06
+    mov al, 0
+    mov bh, 0x0F
+    mov ch, 0
+    mov cl, 0
+    mov dh, 24
+    mov dl, 79
     int 0x10
-    inc si
-    jmp .next_char
-.fim:
-    popa
+
+    mov ah, 0x02
+    mov bh, 0
+    mov dh, 0
+    mov dl, 0
+    int 0x10
     ret
 
-; ---------------------------------------------------------------------------
-; newline
-; Imprime CR+LF
-; ---------------------------------------------------------------------------
-newline:
+
+print_string:
+    lodsb
+    or al, al
+    jz .done
+    mov ah, 0x0E
+    int 0x10
+    jmp print_string
+.done:
+    ret
+
+print_barra_n:
     pusha
     mov ah, 0x0E
     mov al, 0x0D
@@ -259,95 +333,21 @@ newline:
     ret
 
 ; ---------------------------------------------------------------------------
-; read_line
-; Lê uma linha do teclado para DS:DI até encontrar ENTER (0Dh).
-; Coloca terminador 0 no final.
+; copy_InputBuffer_to_kernelBuffer
+; Copia DS:InputBuffer -> 0x9000:0000
 ; ---------------------------------------------------------------------------
-read_line:
-    pusha
-.read_loop:
-    ; Espera tecla
-    mov ah, 0
-    int 0x16
-
-    cmp al, 0Dh        ; ENTER?
-    je .fim_leitura
-
-    cmp al, 08h        ; Backspace?
-    je .backspace
-
-    ; Mostra a tecla
-    mov ah, 0x0E
-    int 0x10
-    ; Armazena no buffer
-    mov [di], al
-    inc di
-    jmp .read_loop
-
-.backspace:
-    cmp di, editorBuffer
-    je .read_loop
-    ; Volta o cursor uma posição
-    mov ah, 0x0E
-    mov al, 08h
-    int 0x10
-    ; Apaga na tela (espaço em branco)
-    mov al, ' '
-    int 0x10
-    ; Volta novamente
-    mov al, 08h
-    int 0x10
-
-    dec di
-    jmp .read_loop
-
-.fim_leitura:
-    mov byte [di], 0
-    popa
-    ret
-
-; ---------------------------------------------------------------------------
-; compare_strings
-; Compara até CX caracteres ou até encontrar 0.
-;   SI -> string1
-;   DI -> string2
-;   CX -> comprimento máximo
-; Retorna ZF=1 (JE) se iguais, ZF=0 se diferente.
-; ---------------------------------------------------------------------------
-compare_strings:
-    pusha
-.cmp_loop:
-    mov al, [si]
-    mov bl, [di]
-    cmp al, bl
-    jne .done
-    cmp al, 0
-    je .done
-    inc si
-    inc di
-    loop .cmp_loop
-    ; Se saiu por loop=0 sem diferir, consideramos iguais no limite
-    cmp ax, ax      ; "força" ZF=1
-.done:
-    popa
-    ret
-
-; ---------------------------------------------------------------------------
-; copy_editorBuffer_to_kernelBuffer
-; Copia DS:editorBuffer -> 0x9000:0000
-; ---------------------------------------------------------------------------
-copy_editorBuffer_to_kernelBuffer:
+copy_InputBuffer_to_kernelBuffer:
     pusha
 
     ; Salva nosso DS
     push ds
 
-    ; DS atual = CS => para pegar o editorBuffer corretamente
+    ; DS atual = CS => para pegar o InputBuffer corretamente
     push cs
     pop ds
 
-    ; SI = editorBuffer
-    mov si, editorBuffer
+    ; SI = InputBuffer
+    mov si, InputBuffer
 
     ; Ajusta ES=0x9000 para copiar para o buffer do kernel
     mov ax, 0x9000
@@ -372,10 +372,10 @@ copy_editorBuffer_to_kernelBuffer:
     ret
 
 ; ---------------------------------------------------------------------------
-; copy_kernel_buffer_to_editorBuffer
-; Copia 0x9000:0000 -> DS:editorBuffer
+; copy_kernel_buffer_to_InputBuffer
+; Copia 0x9000:0000 -> DS:InputBuffer
 ; ---------------------------------------------------------------------------
-copy_kernel_buffer_to_editorBuffer:
+copy_kernel_buffer_to_InputBuffer:
     pusha
 
     ; Configura ES para apontar para o buffer fixo do kernel (0x9000:0000)
@@ -384,8 +384,8 @@ copy_kernel_buffer_to_editorBuffer:
     mov es, ax
     xor si, si
 
-    ; DS continua sendo o segmento do editor; copiamos para editorBuffer
-    mov di, editorBuffer
+    ; DS continua sendo o segmento do editor; copiamos para InputBuffer
+    mov di, InputBuffer
 
 .copy_read:
     mov al, es:[si]   ; Acessa a memória no segmento ES (0x9000)
@@ -403,11 +403,94 @@ copy_kernel_buffer_to_editorBuffer:
     popa
     ret
 
+;------------------------------------------------------------------------------
+; print_filename
+; Imprime até 11 bytes ou até encontrar byte 0
+; Entrada: SI -> ponteiro para o nome do arquivo
+;------------------------------------------------------------------------------
+print_filename:
+.pf_loop:
+    mov al, [si]       ; Lê o caractere atual
+    cmp al, 0          ; Verifica se é um terminador nulo
+    je .pf_done        ; Se for, sai do loop
+    mov ah, 0x0E       ; Função para imprimir caractere na tela
+    int 0x10           ; Chama a interrupção de vídeo
+    inc si             ; Avança para o próximo caractere
+    jmp .pf_loop       ; Repete o loop
+.pf_done:
+    ret
 
 ;------------------------------------------------------------------------------
-; limpar_buffer
-; in: buffer em bx, TAM_LIMPAR <- tamanho do buffer
-; out: buffer com 0's
+; ler_linha
+; Le uma linha do teclado e armazena no buffer em di (termina com byte 0)
+;------------------------------------------------------------------------------
+ler_linha:
+.ll_loop:
+    mov ah, 0
+    int 16h
+
+    cmp al, 0Dh  ; Enter
+    je .fim_leitura
+
+    cmp al, 08h  ; Backspace
+    je .backspace
+
+    ; Imprime e armazena
+    mov ah, 0x0E
+    int 0x10
+    mov [di], al
+    inc di
+    jmp .ll_loop
+
+.backspace:
+    cmp di, InputBuffer  ; Verifica se ja estamos no inicio do buffer
+    je .ll_loop          ; Se sim, ignora o backspace
+
+    mov ah, 0x03         ; obter a posicao do cursor
+    xor bh, bh           ; Pagina de video 0
+    int 0x10             
+
+    cmp dl, 0            ; Verifica se estamos na coluna 0
+    jne .apagar_caractere ; Se não estamos na coluna 0, apaga o caractere
+    ; Se estamos na coluna 0, precisamos ajustar a linha
+    cmp dh, 0            ; Verifica se estamos na primeira linha
+    je .ll_loop; Se estamos na primeira linha, não fazemos nada
+    jmp .ajustar_linha   ; Caso contrario, ajustamos a linha
+
+.ajustar_linha:
+    mov dl, 79           ; Vai para a ultima coluna da linha anterior
+    dec dh               ; Decrementa a linha atual
+    jmp .ajustar_cursor  ; Ajusta o cursor
+
+.apagar_caractere:
+    dec dl               ; Move o cursor para tras, decrementando a coluna
+    
+.ajustar_cursor:
+    mov ah, 0x02         
+    xor bh, bh           ; Pagina de video 0
+    int 0x10             ; Chama a interrupção BIOS
+
+    ; Atualiza o buffer
+    dec di               ; Retrocede a posição no buffer
+    mov byte [di], 0     ; Limpa o caractere removido
+
+    ; Agora limpa visualmente o caractere
+    mov ah, 0x0E         ; Serviço de teletype
+    mov al, ' '          ; Espaço em branco
+    int 0x10             ; Imprime espaço
+    
+    ; E reposiciona o cursor novamente
+    mov ah, 0x02         
+    int 0x10 
+
+    jmp .ll_loop         ; Volta ao loop principal
+
+.fim_leitura:
+    mov byte [di], 0  ; fecha string com 0
+    ret
+
+;------------------------------------------------------------------------------
+; Entrada: buffer em bx, tamanho de bytes em TAM_LIMPAR
 ;------------------------------------------------------------------------------
 limpar_buffer:
     pusha
@@ -421,37 +504,61 @@ limpar_buffer:
     popa
     ret
 
+; ---------------------------------------------------------------------------
+; compare_strings
+; Compara até CX caracteres ou até encontrar 0.
+;   SI -> string1
+;   DI -> string2
+;   CX -> comprimento máximo
+; Retorna ZF=1 (JE) se iguais, ZF=0 se diferente.
+; ---------------------------------------------------------------------------
+compare_strings:
+    pusha
+.cs_loop:
+    mov al, [si]
+    mov bl, [di]
+    cmp al, bl
+    jne .cs_done
+    cmp al, 0
+    je .cs_done
+    inc si
+    inc di
+    loop .cs_loop
+    cmp ax, ax
+.cs_done:
+    popa
+    ret
 
-; ===========================================================================
-; DADOS
-; ===========================================================================
-promptEditor        db 'EDITOR> ', 0
+;------------------------------------------------------------------------------
+; Variáveis e Constantes
+;------------------------------------------------------------------------------
+MsgBemVindo         db 'Bem-vindo ao Editor de Texto.', 0
+PromptEditor        db 'EDITOR> ', 0
 cmdCriar            db 'criar', 0
 cmdLer              db 'ler', 0
 cmdGravar           db 'gravar', 0
 cmdSair             db 'sair', 0
+cmdListar           db 'listar', 0
 
-msgDigiteNomeArq    db 'Digite o nome do arquivo (max 11 chars): ', 0
+MsgErroComando      db 'Comando desconhecido.', 0
+MsgNomeArquivo      db 'Digite o nome do arquivo: ', 0
+MsgErroCriacao      db 'Erro ao criar o arquivo.', 0
+MsgArquivoCriado    db 'Arquivo criado com sucesso.', 0
 msgDigiteConteudo   db 'Digite o conteudo (max 511 chars, ENTER finaliza):', 0
 msgConteudoLido     db 'Conteudo lido: ', 0
-msgArquivoCriado    db '[Ok] Arquivo criado!', 0
-msgArquivoGravado   db '[Ok] Arquivo gravado!', 0
-msgErroComando      db '[Erro] Comando desconhecido.', 0
 msgArquivoLido      db '[Ok] Leitura concluida!', 0
+msgArquivoGravado   db '[Ok] Arquivo gravado!', 0
 msgFim              db 'Editor finalizado. Retornando ao kernel (loop).',0
 
 msgSeparador        db '-------------------------------', 0
 msgQuebraLinha      db 0Dh, 0Ah, 0
 TAM_LIMPAR          dw 0 
+
+InputBuffer         db 512 dup(0)
+FileNameBuffer      db 11 dup(0) ; Nome do arquivo + terminador
+DiretorioBuffer     db 512 dup(0)
+
 TAMANHO_SETOR       EQU 512
 
-; Buffer local do editor para digitação do usuário
-editorBuffer        times 512 db 0
-
-; Nome do arquivo (até 11 bytes + 0)
-fileNameBuffer      times 12 db 0
-
-; ===========================================================================
-; Preenche até 3 setores (1536 bytes) – pois o editor foi definido como 3 setores
-; ===========================================================================
-times 1536 - ($ - $$) db 0
+; Preenchimento até o final do setor
+times 2560 - ($ - $$) db 0

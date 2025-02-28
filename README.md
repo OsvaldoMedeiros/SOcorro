@@ -1,7 +1,7 @@
 # Guia de Compilação e Execução
 
-## Baixar Dependências
-Instale o **NASM** e o **QEMU**
+## Dependências
+**NASM** e **QEMU**
 
 ## Verificar o Tamanho do Arquivo
 

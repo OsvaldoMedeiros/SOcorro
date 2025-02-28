@@ -1,12 +1,6 @@
 ; ---------------------------------------------------------------------------
 ; É carregado em 0x1000:0000 (3 setores).
 ;
-;   Comandos disponíveis no prompt do editor:
-;       criar  -> cria um novo arquivo
-;       ler    -> lê e mostra o conteúdo de um arquivo
-;       gravar -> grava dados em um arquivo
-;       sair   -> volta (fica em loop infinito, pois o kernel não retorna)
-;
 ; Obs:
 ;   Nome de arquivo limitado a 11 bytes, sem espaços, terminado em 0.
 ;   O kernel armazena/recupera dados de 1 setor (512 bytes) em 0x9000:0000.

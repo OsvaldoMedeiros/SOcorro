@@ -36,4 +36,3 @@ start:
 ; Preencher o setor de boot com zeros até o byte 510
 times 510 - ($ - $$) db 0
 dw 0xAA55      ; Assinatura de bootloader
-

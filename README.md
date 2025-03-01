@@ -1,5 +1,3 @@
-# Guia de Compilação e Execução
-
 ## Dependências
 **NASM** e **QEMU**
 

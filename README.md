@@ -1,12 +1,3 @@
-# Equipe
-* Osvaldo Medeiros Cavalcante Neto
-* João Rodrigo Ferreira do Nascimento
-* Anderson Moura Costa do Nascimento
-* Juan de Souza Holanda
-* Vinicius Lavor Lira
-* Diego Duarte de Lima
-* Matheus de Castro Vieira
-   
 ## Dependências
 **NASM** e **QEMU**
 
